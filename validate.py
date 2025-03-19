@@ -19,6 +19,8 @@ from dataset_paths import DATASET_PATHS
 import random
 import shutil
 from scipy.ndimage.filters import gaussian_filter
+import datetime
+from copy import deepcopy
 
 SEED = 0
 def set_seed():
@@ -143,6 +145,7 @@ def recursively_read(rootdir, must_contain, exts=["png", "jpg", "JPEG", "jpeg", 
         for file in f:
             if (file.split('.')[1] in exts)  and  (must_contain in os.path.join(r, file)):
                 out.append(os.path.join(r, file))
+    # print(f'out变量:{out[:10]}, {len(out)}')
     return out
 
 
@@ -267,17 +270,35 @@ if __name__ == '__main__':
     parser.add_argument('--jpeg_quality', type=int, default=None, help="100, 90, 80, ... 30. Used to test robustness of our model. Not apply if None")
     parser.add_argument('--gaussian_sigma', type=int, default=None, help="0,1,2,3,4.     Used to test robustness of our model. Not apply if None")
 
+    parser.add_argument('--top_layer', type=str, default='fc', help='the layer that follows the vit-transformer, fc or transformer')
 
     opt = parser.parse_args()
 
-    
+    # print(opt.top_layer)
+
     if os.path.exists(opt.result_folder):
         shutil.rmtree(opt.result_folder)
     os.makedirs(opt.result_folder)
 
-    model = get_model(opt.arch)
+    model = get_model(opt.arch, top_layer=opt.top_layer)
     state_dict = torch.load(opt.ckpt, map_location='cpu')
-    model.fc.load_state_dict(state_dict)
+    # model.fc.load_state_dict(state_dict)
+
+    # --------------------------------------------------------------
+    old_parameters = []
+    for name, param in model.named_parameters():
+        if not name.startswith('model.'):
+            old_parameters.append(param)
+    old_parameters = deepcopy(old_parameters)
+    model.load_state_dict(state_dict, strict=False)
+    new_parameters = []
+    for name, param in model.named_parameters():
+        if not name.startswith('model.'):
+            new_parameters.append(param)
+    assert len(old_parameters) == len(new_parameters), '权重长度不匹配'
+    assert [old_parameters[n].data == new_parameters[n].data for n in range(len(old_parameters))], '权重加载失败'
+    # --------------------------------------------------------------
+
     print ("Model loaded..")
     model.eval()
     model.cuda()
@@ -303,10 +324,11 @@ if __name__ == '__main__':
 
         loader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, shuffle=False, num_workers=4)
         ap, r_acc0, f_acc0, acc0, r_acc1, f_acc1, acc1, best_thres = validate(model, loader, find_thres=True)
+        now = datetime.datetime.now()  # 获取当前日期和时间
 
-        with open( os.path.join(opt.result_folder,'ap.txt'), 'a') as f:
-            f.write(dataset_path['key']+': ' + str(round(ap*100, 2))+'\n' )
+        with open( os.path.join(opt.result_folder,'ap1.txt'), 'a') as f:
+            f.write(dataset_path['key']+': ' + str(round(ap*100, 2))+'\n'+str(now)+'\n')
 
-        with open( os.path.join(opt.result_folder,'acc0.txt'), 'a') as f:
+        with open( os.path.join(opt.result_folder,'acc01.txt'), 'a') as f:
             f.write(dataset_path['key']+': ' + str(round(r_acc0*100, 2))+'  '+str(round(f_acc0*100, 2))+'  '+str(round(acc0*100, 2))+'\n' )
 

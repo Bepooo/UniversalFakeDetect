@@ -1,5 +1,6 @@
-from .clip_models import CLIPModel
+# from .clip_models_old import CLIPModel
 from .imagenet_models import ImagenetModel
+from .clip_models import CLIPModel
 
 
 VALID_NAMES = [
@@ -33,11 +34,12 @@ VALID_NAMES = [
 
 
 
-def get_model(name):
+def get_model(name, top_layer='fc'):
     assert name in VALID_NAMES
     if name.startswith("Imagenet:"):
         return ImagenetModel(name[9:]) 
     elif name.startswith("CLIP:"):
-        return CLIPModel(name[5:])  
+        # print('getmodel函数：', top_layer)
+        return CLIPModel(name[5:], top_layer=top_layer)
     else:
         assert False 
